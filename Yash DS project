@@ -1,0 +1,233 @@
+C Code Snippets
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define MAX_NAME_LEN 100
+#define MAX_ITEM_LEN 100
+
+// ----------- STRUCTURES -----------
+
+typedef struct Order {
+int orderId;
+char customerName[MAX_NAME_LEN];
+char items[MAX_ITEM_LEN];
+int priority;
+struct Order* next;  // For linked list (processed orders)
+} Order;
+
+typedef struct QueueNode {
+Order* order;
+struct QueueNode* next;
+} QueueNode;
+
+typedef struct Queue {
+QueueNode* front;
+QueueNode* rear;
+} Queue;
+
+typedef struct Heap {
+Order** array;
+int size;
+int capacity;
+} Heap;
+
+// ----------- QUEUE FUNCTIONS -----------
+
+void enqueue(Queue* q, Order* order) {
+QueueNode* newNode = (QueueNode*)malloc(sizeof(QueueNode));
+newNode->order = order;
+newNode->next = NULL;
+if (q->rear == NULL) {
+q->front = q->rear = newNode;
+} else {
+q->rear->next = newNode;
+q->rear = newNode;
+}
+}
+
+Order* dequeue(Queue* q) {
+if (q->front == NULL) return NULL;
+QueueNode* temp = q->front;
+Order* order = temp->order;
+q->front = q->front->next;
+if (q->front == NULL) q->rear = NULL;
+free(temp);
+return order;
+}
+
+void displayQueue(Queue* q) {
+printf("\n-------------------- Pending Orders --------------------\n");
+printf("| Order ID | Customer Name      | Priority |\n");
+printf("--------------------------------------------------------\n");
+QueueNode* current = q->front;
+while (current != NULL) {
+printf("| %-8d | %-18s | %-8d |\n", current->order->orderId, current->order->customerName, current->order->priority);
+current = current->next;
+}
+printf("--------------------------------------------------------\n");
+}
+
+// ----------- HEAP (PRIORITY QUEUE) FUNCTIONS -----------
+
+void swap(Order** a, Order** b) {
+Order* temp = *a;
+*a = *b;
+*b = temp;
+}
+
+void heapifyUp(Heap* h, int index) {
+while (index > 0 && h->array[(index - 1) / 2]->priority > h->array[index]->priority) {
+swap(&h->array[index], &h->array[(index - 1) / 2]);
+index = (index - 1) / 2;
+}
+}
+
+void heapifyDown(Heap* h, int index) {
+int smallest = index;
+int left = 2 * index + 1;
+int right = 2 * index + 2;
+
+if (left < h->size && h->array[left]->priority < h->array[smallest]->priority)
+smallest = left;
+if (right < h->size && h->array[right]->priority < h->array[smallest]->priority)
+smallest = right;
+if (smallest != index) {
+swap(&h->array[index], &h->array[smallest]);
+heapifyDown(h, smallest);
+}
+}
+
+void insertHeap(Heap* h, Order* order) {
+if (h->size == h->capacity) {
+h->capacity *= 2;
+h->array = realloc(h->array, h->capacity * sizeof(Order*));
+}
+h->array[h->size] = order;
+heapifyUp (h, h->size);
+h->size++;
+}
+
+Order* extractMaxHeap(Heap* h) {
+if (h->size == 0) return NULL;
+Order* top = h->array[0];
+h->array[0] = h->array[h->size - 1];
+h->size--;
+heapifyDown(h, 0);
+return top;
+}
+
+void displayHeap(Heap* h) {
+printf("\n-------------------- Urgent Orders (Priority) --------------------\n");
+printf("| Order ID | Customer Name      | Priority |\n");
+printf("--------------------------------------------------------------\n");
+for (int i = 0; i < h->size; i++) {
+printf("| %-8d | %-18s | %-8d |\n", h->array[i]->orderId, h->array[i]->customerName, h->array[i]->priority);
+}
+printf("--------------------------------------------------------------\n");
+}
+
+// ----------- LINKED LIST (PROCESSED ORDERS) FUNCTIONS -----------
+
+void addProcessedOrder(Order** head, Order* order) {
+order->next = *head;
+*head = order;
+}
+
+void displayProcessedOrders(Order* head) {
+printf("\n-------------------- Processed Orders --------------------\n");
+if (head == NULL) {
+printf("No orders have been processed yet.\n");
+return;
+}
+printf("| Order ID | Customer Name      | Items             |\n");
+printf("--------------------------------------------------------\n");
+Order* current = head;
+while (current != NULL) {
+printf("| %-8d | %-18s | %-18s |\n", current->orderId, current->customerName, current->items);
+current = current->next;
+}
+printf("--------------------------------------------------------\n");
+}
+
+// ----------- MAIN FUNCTION -----------
+
+int main() {
+Queue pendingOrders = {NULL, NULL};
+
+Heap urgentOrders;
+urgentOrders.capacity = 10;
+urgentOrders.size = 0;
+urgentOrders.array = (Order**)malloc(urgentOrders.capacity * sizeof(Order*));
+
+Order* processedOrders = NULL;
+
+int choice;
+do {
+printf("\n----- E-Commerce Order Management System -----\n");
+printf("1. Place New Order\n");
+printf("2. Process Next Order\n");
+printf("3. Display Pending Orders\n");
+printf("4. Display Urgent Orders\n");
+printf("5. Display Processed Orders\n");
+printf("0. Exit\n");
+printf("Enter your choice: ");
+scanf("%d", &choice);
+getchar();
+
+switch (choice) {
+case 1: {
+Order* newOrder = (Order*)malloc(sizeof(Order));
+printf("Enter Order ID: ");
+scanf("%d", &newOrder->orderId);
+getchar();
+printf("Enter Customer Name: ");
+fgets(newOrder->customerName, MAX_NAME_LEN, stdin);
+newOrder->customerName[strcspn(newOrder->customerName, "\n")] = 0;
+printf("Enter Items: ");
+fgets(newOrder->items, MAX_ITEM_LEN, stdin);
+newOrder->items[strcspn(newOrder->items, "\n")] = 0;
+printf("Enter Priority (1-High, 2-Medium, 3-Low): ");
+scanf("%d", &newOrder->priority);
+getchar();
+
+enqueue(&pendingOrders, newOrder);
+insertHeap(&urgentOrders, newOrder);
+printf("Order placed successfully!\n");
+break;
+}
+case 2: {
+if (urgentOrders.size > 0) {
+Order* processedOrder = extractMaxHeap(&urgentOrders);
+addProcessedOrder(&processedOrders, processedOrder);
+printf("Processed urgent order: %d (%s)\n", processedOrder->orderId, processedOrder->customerName);
+} else if (pendingOrders.front != NULL) {
+Order* processedOrder = dequeue(&pendingOrders);
+addProcessedOrder(&processedOrders, processedOrder);
+printf("Processed order: %d (%s)\n", processedOrder->orderId, processedOrder->customerName);
+} else {
+printf("No orders to process.\n");
+}
+break;	
+}
+case 3:
+displayQueue(&pendingOrders);
+break;
+case 4:
+displayHeap(&urgentOrders);
+break;
+case 5:
+displayProcessedOrders(processedOrders);
+break;
+case 0:
+printf("Exiting system.\n");
+break;
+default:
+printf("Invalid choice. Please try again.\n");
+}
+} while (choice != 0);
+
+// Free memory (you can expand this if needed)
+free(urgentOrders.array);
+return 0;
+}
